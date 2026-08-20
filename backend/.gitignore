@@ -1,5 +1,8 @@
 node_modules
 # Keep environment variables out of version control
 .env
-
+# keep prisma schema and generated code out of git
+prisma/schema.prisma
+prisma/generated
 /generated/prisma
+dist/
