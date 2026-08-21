@@ -121,6 +121,7 @@ export default function CreateCampaignForm({
 
     try {
       await createCampaign({
+        userId: user.id,
         subject: values.subject.trim(),
         body: values.body.trim(),
         startTime: new Date(values.startTime).toISOString(),

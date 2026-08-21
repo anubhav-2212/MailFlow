@@ -26,6 +26,7 @@ export interface Campaign {
 }
 
 export interface CreateCampaignInput {
+  userId:string;
   subject: string;
   body: string;
   startTime: string;
