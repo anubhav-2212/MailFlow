@@ -10,6 +10,7 @@ type NavigationItem = {
 const navigationItems: NavigationItem[] = [
   { to: '/dashboard', label: 'Dashboard', end: true },
   { to: '/dashboard/campaigns', label: 'Campaigns' },
+  { to: '/dashboard/senders', label: 'Senders' },
   { to: '/dashboard/scheduled', label: 'Scheduled' },
   { to: '/dashboard/sent', label: 'Sent' },
 ];
@@ -32,19 +33,30 @@ export default function DashboardLayout() {
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white">
               RI
             </div>
+
             <div>
-              <p className="text-lg font-semibold tracking-tight">ReachInbox</p>
-              <p className="text-sm text-slate-500">Application workspace</p>
+              <p className="text-lg font-semibold tracking-tight">
+                ReachInbox
+              </p>
+
+              <p className="text-sm text-slate-500">
+                Application workspace
+              </p>
             </div>
           </div>
 
-          <nav className="mt-6 flex gap-2 overflow-x-auto md:flex-col" aria-label="Dashboard navigation">
+          <nav
+            className="mt-6 flex gap-2 overflow-x-auto md:flex-col"
+            aria-label="Dashboard navigation"
+          >
             {navigationItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) => getNavLinkClass(isActive)}
+                className={({ isActive }) =>
+                  getNavLinkClass(isActive)
+                }
               >
                 {item.label}
               </NavLink>

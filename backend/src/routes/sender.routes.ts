@@ -5,8 +5,18 @@ import {
   getSendersController,
 } from "../controllers/sender.controller.js";
 
+import { requireAuth } from "../middleware/auth.middleware.js";
+
 export const senderRouter = Router();
 
-senderRouter.post("/", createSenderController);
+senderRouter.post(
+  "/",
+  requireAuth,
+  createSenderController,
+);
 
-senderRouter.get("/", getSendersController);
+senderRouter.get(
+  "/",
+  requireAuth,
+  getSendersController,
+);
