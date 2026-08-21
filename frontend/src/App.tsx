@@ -10,6 +10,7 @@ import DashboardPage from './pages/DashboardPage';
 import CampaignsPage from './pages/CampaignsPage';
 import SendersPage from './pages/SenderPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
+import ScheduledEmailsPage from './pages/ScheduledEmailsPage';
 
 function DashboardPlaceholder({ title }: { title: string }) {
   return (
@@ -75,9 +76,7 @@ export default function App() {
           {/* Scheduled */}
           <Route
             path="scheduled"
-            element={
-              <DashboardPlaceholder title="Scheduled" />
-            }
+            element={<ScheduledEmailsPage />}
           />
 
           {/* Sent */}
