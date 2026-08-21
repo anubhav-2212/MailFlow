@@ -20,3 +20,13 @@ export async function createCampaign(
   const response = await apiClient.post<CreateCampaignResponse>('/campaigns', input);
   return response.data.campaign;
 }
+
+export async function getCampaign(
+  campaignId: string,
+): Promise<Campaign> {
+  const response = await apiClient.get<{
+    campaign: Campaign;
+  }>(`/campaigns/${campaignId}`);
+
+  return response.data.campaign;
+}

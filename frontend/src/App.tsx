@@ -9,6 +9,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import CampaignsPage from './pages/CampaignsPage';
 import SendersPage from './pages/SenderPage';
+import CampaignDetailPage from './pages/CampaignDetailPage';
 
 function DashboardPlaceholder({ title }: { title: string }) {
   return (
@@ -57,6 +58,12 @@ export default function App() {
           <Route
             path="campaigns"
             element={<CampaignsPage />}
+          />
+
+          {/* Individual campaign */}
+          <Route
+            path="campaigns/:campaignId"
+            element={<CampaignDetailPage />}
           />
 
           {/* Senders */}
