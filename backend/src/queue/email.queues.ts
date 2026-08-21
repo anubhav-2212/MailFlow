@@ -45,7 +45,7 @@ export async function scheduleEmail(
       emailId,
     },
     {
-      jobId: `email:${emailId}`,
+      jobId: `email-${emailId}`,
       delay,
     }
   );

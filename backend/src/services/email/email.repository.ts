@@ -1,12 +1,15 @@
-import type { Email } from '../../generated/prisma/client.js';
+
 import { EmailStatus } from '../../generated/prisma/enums.js';
 
 import prisma from '../../config/prisma.js';
 //finding email by id for job processing 
-export async function findEmailById(emailId: string): Promise<Email | null> {
+export async function findEmailById(emailId: string) {
   return prisma.email.findUnique({
     where: {
       id: emailId,
+    },
+    include: {
+      sender: true,
     },
   });
 }

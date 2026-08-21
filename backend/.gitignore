@@ -6,3 +6,6 @@ prisma/schema.prisma
 prisma/generated
 /generated/prisma
 dist/
+
+scripts/
+
