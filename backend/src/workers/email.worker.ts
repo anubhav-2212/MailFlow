@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { Worker, type Job } from 'bullmq';
 
 import redisConnection from '../config/redis.js';
@@ -7,10 +9,15 @@ import type { SendEmailJobData } from '../queue/queues.types.js';
 import { processEmailSendingJob } from '../services/email/email-processing.service.js';
 
 function getWorkerConcurrency() {
-  const rawConcurrency = process.env.EMAIL_WORKER_CONCURRENCY ?? '1';
+  const rawConcurrency =
+    process.env.EMAIL_WORKER_CONCURRENCY ?? '1';
+
   const parsedConcurrency = Number(rawConcurrency);
 
-  if (!Number.isInteger(parsedConcurrency) || parsedConcurrency < 1) {
+  if (
+    !Number.isInteger(parsedConcurrency) ||
+    parsedConcurrency < 1
+  ) {
     throw new Error(
       `Invalid EMAIL_WORKER_CONCURRENCY value "${rawConcurrency}". Expected a positive integer.`,
     );
@@ -23,6 +30,7 @@ const workerConcurrency = getWorkerConcurrency();
 
 const emailWorker = new Worker<SendEmailJobData>(
   EMAIL_QUEUE_NAME,
+
   async (job: Job<SendEmailJobData>) => {
     logInfo('email.worker.job_started', {
       jobId: String(job.id),
@@ -41,11 +49,16 @@ const emailWorker = new Worker<SendEmailJobData>(
       emailId: job.data.emailId,
     });
   },
+
   {
     connection: redisConnection,
     concurrency: workerConcurrency,
   },
 );
+
+// ----------------------------------------
+// Worker ready
+// ----------------------------------------
 
 emailWorker.on('ready', () => {
   logInfo('email.worker.ready', {
@@ -53,6 +66,10 @@ emailWorker.on('ready', () => {
     concurrency: workerConcurrency,
   });
 });
+
+// ----------------------------------------
+// Job active
+// ----------------------------------------
 
 emailWorker.on('active', (job) => {
   logInfo('email.worker.job_active', {
@@ -62,6 +79,10 @@ emailWorker.on('active', (job) => {
   });
 });
 
+// ----------------------------------------
+// Job completed
+// ----------------------------------------
+
 emailWorker.on('completed', (job) => {
   logInfo('email.worker.job_acknowledged', {
     jobId: String(job.id),
@@ -69,6 +90,10 @@ emailWorker.on('completed', (job) => {
     emailId: job.data.emailId,
   });
 });
+
+// ----------------------------------------
+// Job failed
+// ----------------------------------------
 
 emailWorker.on('failed', (job, error) => {
   logError('email.worker.job_failed', error, {
@@ -78,12 +103,17 @@ emailWorker.on('failed', (job, error) => {
   });
 });
 
+// ----------------------------------------
+// Graceful shutdown
+// ----------------------------------------
+
 async function shutdown(signal: string) {
   logInfo('email.worker.shutdown_started', {
     signal,
   });
 
   await emailWorker.close();
+
   await redisConnection.quit();
 
   logInfo('email.worker.shutdown_completed', {
@@ -93,13 +123,19 @@ async function shutdown(signal: string) {
 
 process.on('SIGINT', async () => {
   await shutdown('SIGINT');
+
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   await shutdown('SIGTERM');
+
   process.exit(0);
 });
+
+// ----------------------------------------
+// Worker boot
+// ----------------------------------------
 
 logInfo('email.worker.booted', {
   queueName: EMAIL_QUEUE_NAME,
