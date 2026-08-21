@@ -47,6 +47,7 @@ function validate(values: FormValues): FormErrors {
   }
 
   const delayMs = Number(values.delayMs);
+
   if (!values.delayMs.trim()) {
     errors.delayMs = 'Delay is required.';
   } else if (!Number.isFinite(delayMs) || delayMs <= 0) {
@@ -54,6 +55,7 @@ function validate(values: FormValues): FormErrors {
   }
 
   const hourlyLimit = Number(values.hourlyLimit);
+
   if (!values.hourlyLimit.trim()) {
     errors.hourlyLimit = 'Hourly limit is required.';
   } else if (!Number.isFinite(hourlyLimit) || hourlyLimit <= 0) {
@@ -75,12 +77,22 @@ export default function CreateCampaignForm({
   onSuccess,
 }: CreateCampaignFormProps) {
   const { user } = useAuth();
-  console.log("AUTH USER:", user);
+
+  console.log('AUTH USER:', user);
+
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // --------------------------------------------------
+  // Lead upload state
+  // --------------------------------------------------
+
+  const [recipients, setRecipients] = useState<string[]>([]);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   function handleChange(
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -96,14 +108,69 @@ export default function CreateCampaignForm({
       ...current,
       [name]: undefined,
     }));
+
     setSubmitError(null);
     setSuccessMessage(null);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  // --------------------------------------------------
+  // CSV / TXT upload
+  // --------------------------------------------------
+
+  function handleFileChange(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setFileName(file.name);
+    setFileError(null);
+    setRecipients([]);
+
+    file
+      .text()
+      .then((text) => {
+        const matches =
+          text.match(
+            /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+          ) ?? [];
+
+        const uniqueEmails = [
+          ...new Set(
+            matches.map((email) =>
+              email.toLowerCase().trim(),
+            ),
+          ),
+        ];
+
+        if (uniqueEmails.length === 0) {
+          setFileError(
+            'No valid email addresses were found in this file.',
+          );
+          return;
+        }
+
+        setRecipients(uniqueEmails);
+      })
+      .catch(() => {
+        setFileError('Unable to read the selected file.');
+      });
+  }
+
+  // --------------------------------------------------
+  // Submit
+  // --------------------------------------------------
+
+  async function handleSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     const nextErrors = validate(values);
+
     setErrors(nextErrors);
     setSubmitError(null);
     setSuccessMessage(null);
@@ -113,7 +180,9 @@ export default function CreateCampaignForm({
     }
 
     if (!user?.id) {
-      setSubmitError('You must be signed in to create a campaign.');
+      setSubmitError(
+        'You must be signed in to create a campaign.',
+      );
       return;
     }
 
@@ -124,14 +193,22 @@ export default function CreateCampaignForm({
         userId: user.id,
         subject: values.subject.trim(),
         body: values.body.trim(),
-        startTime: new Date(values.startTime).toISOString(),
+        startTime: new Date(
+          values.startTime,
+        ).toISOString(),
         delayMs: Number(values.delayMs),
         hourlyLimit: Number(values.hourlyLimit),
       });
 
       setValues(initialValues);
       setErrors({});
-      setSuccessMessage('Campaign created successfully.');
+      setRecipients([]);
+      setFileName(null);
+      setFileError(null);
+
+      setSuccessMessage(
+        'Campaign created successfully.',
+      );
 
       await onSuccess?.();
     } catch (error) {
@@ -144,16 +221,29 @@ export default function CreateCampaignForm({
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-5">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-950">Create campaign</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-950">
+          Create campaign
+        </h2>
+
         <p className="mt-1 text-sm text-slate-500">
-          Set the campaign details and sending schedule. Recipients will be added later.
+          Set the campaign details and sending schedule.
+          Recipients will be added later.
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+      <form
+        className="space-y-5"
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        {/* Subject + Start time */}
+
         <div className="grid gap-5 lg:grid-cols-2">
           <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">Subject</span>
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              Subject
+            </span>
+
             <input
               type="text"
               name="subject"
@@ -162,13 +252,19 @@ export default function CreateCampaignForm({
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
               placeholder="Quarterly outreach"
             />
+
             {errors.subject ? (
-              <p className="mt-2 text-sm text-rose-600">{errors.subject}</p>
+              <p className="mt-2 text-sm text-rose-600">
+                {errors.subject}
+              </p>
             ) : null}
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">Start time</span>
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              Start time
+            </span>
+
             <input
               type="datetime-local"
               name="startTime"
@@ -176,14 +272,22 @@ export default function CreateCampaignForm({
               onChange={handleChange}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
             />
+
             {errors.startTime ? (
-              <p className="mt-2 text-sm text-rose-600">{errors.startTime}</p>
+              <p className="mt-2 text-sm text-rose-600">
+                {errors.startTime}
+              </p>
             ) : null}
           </label>
         </div>
 
+        {/* Body */}
+
         <label className="block">
-          <span className="mb-2 block text-sm font-medium text-slate-700">Body</span>
+          <span className="mb-2 block text-sm font-medium text-slate-700">
+            Body
+          </span>
+
           <textarea
             name="body"
             value={values.body}
@@ -192,14 +296,66 @@ export default function CreateCampaignForm({
             className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
             placeholder="Write the campaign message here..."
           />
-          {errors.body ? <p className="mt-2 text-sm text-rose-600">{errors.body}</p> : null}
+
+          {errors.body ? (
+            <p className="mt-2 text-sm text-rose-600">
+              {errors.body}
+            </p>
+          ) : null}
         </label>
+
+        {/* Lead upload */}
+
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Upload email leads
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Upload a CSV or TXT file containing email
+              addresses.
+            </p>
+          </div>
+
+          <input
+            type="file"
+            accept=".csv,.txt,text/csv,text/plain"
+            onChange={handleFileChange}
+            className="mt-4 block w-full text-sm text-slate-600"
+          />
+
+          {fileName ? (
+            <p className="mt-3 text-sm text-slate-600">
+              File:{' '}
+              <span className="font-medium text-slate-900">
+                {fileName}
+              </span>
+            </p>
+          ) : null}
+
+          {recipients.length > 0 ? (
+            <p className="mt-2 text-sm font-medium text-emerald-700">
+              {recipients.length} unique email
+              {recipients.length === 1 ? '' : 's'} detected.
+            </p>
+          ) : null}
+
+          {fileError ? (
+            <p className="mt-2 text-sm text-rose-600">
+              {fileError}
+            </p>
+          ) : null}
+        </div>
+
+        {/* Delay + Hourly limit */}
 
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-sm font-medium text-slate-700">
               Delay between emails (ms)
             </span>
+
             <input
               type="number"
               min="1"
@@ -209,13 +365,19 @@ export default function CreateCampaignForm({
               onChange={handleChange}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
             />
+
             {errors.delayMs ? (
-              <p className="mt-2 text-sm text-rose-600">{errors.delayMs}</p>
+              <p className="mt-2 text-sm text-rose-600">
+                {errors.delayMs}
+              </p>
             ) : null}
           </label>
 
           <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-700">Hourly limit</span>
+            <span className="mb-2 block text-sm font-medium text-slate-700">
+              Hourly limit
+            </span>
+
             <input
               type="number"
               min="1"
@@ -225,11 +387,16 @@ export default function CreateCampaignForm({
               onChange={handleChange}
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
             />
+
             {errors.hourlyLimit ? (
-              <p className="mt-2 text-sm text-rose-600">{errors.hourlyLimit}</p>
+              <p className="mt-2 text-sm text-rose-600">
+                {errors.hourlyLimit}
+              </p>
             ) : null}
           </label>
         </div>
+
+        {/* Errors */}
 
         {submitError ? (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -237,11 +404,15 @@ export default function CreateCampaignForm({
           </div>
         ) : null}
 
+        {/* Success */}
+
         {successMessage ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
             {successMessage}
           </div>
         ) : null}
+
+        {/* Submit */}
 
         <div className="flex justify-end">
           <button
@@ -249,7 +420,9 @@ export default function CreateCampaignForm({
             disabled={isSubmitting}
             className="inline-flex items-center justify-center rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            {isSubmitting ? 'Creating campaign...' : 'Create campaign'}
+            {isSubmitting
+              ? 'Creating campaign...'
+              : 'Create campaign'}
           </button>
         </div>
       </form>

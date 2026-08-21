@@ -60,12 +60,15 @@ export default function CampaignDetailPage() {
       return;
     }
 
+    // Narrow campaignId so TypeScript knows it is definitely a string
+    const id = campaignId;
+
     async function loadCampaign() {
       setIsLoading(true);
       setError(null);
 
       try {
-        const result = await getCampaign(campaignId);
+        const result = await getCampaign(id);
         setCampaign(result);
       } catch (error) {
         setError(
