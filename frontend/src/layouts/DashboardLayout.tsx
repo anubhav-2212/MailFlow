@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
+import DashboardHeader from '../components/dashboard/DashboardHeader';
 
 type NavigationItem = {
   to: string;
@@ -53,7 +54,10 @@ export default function DashboardLayout() {
 
         <main className="min-w-0 flex-1 p-4 md:pl-4">
           <div className="min-h-full rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-            <Outlet />
+            <div className="flex min-h-full flex-col gap-6">
+              <DashboardHeader />
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
