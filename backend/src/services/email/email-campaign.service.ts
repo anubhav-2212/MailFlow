@@ -94,3 +94,38 @@ export async function createCampaignEmails(
 
   return emails;
 }
+export async function getScheduledEmails() {
+  return prisma.email.findMany({
+    where: {
+      status: "SCHEDULED",
+    },
+
+    include: {
+      sender: true,
+      campaign: true,
+    },
+
+    orderBy: {
+      scheduledAt: "asc",
+    },
+  });
+}
+
+export async function getSentEmails() {
+  return prisma.email.findMany({
+    where: {
+      status: {
+        in: ["SENT", "FAILED"],
+      },
+    },
+
+    include: {
+      sender: true,
+      campaign: true,
+    },
+
+    orderBy: {
+      sentAt: "desc",
+    },
+  });
+}

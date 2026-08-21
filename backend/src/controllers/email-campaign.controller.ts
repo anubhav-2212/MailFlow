@@ -1,6 +1,15 @@
 import type { Request, Response } from "express";
 
-import {createCampaignEmails} from "../services/email/email-campaign.service.js";
+import {
+  createCampaignEmails,
+  getScheduledEmails,
+  getSentEmails,
+} from "../services/email/email-campaign.service.js";
+
+
+// ========================================
+// CREATE CAMPAIGN EMAILS
+// ========================================
 
 export async function createCampaignEmailsController(
   req: Request<{ campaignId: string }>,
@@ -37,7 +46,9 @@ export async function createCampaignEmailsController(
       count: emails.length,
       emails,
     });
+
   } catch (error) {
+
     console.error(
       "createCampaignEmailsController error:",
       error,
@@ -68,6 +79,68 @@ export async function createCampaignEmailsController(
 
     return res.status(500).json({
       message,
+    });
+  }
+}
+
+
+// ========================================
+// GET SCHEDULED EMAILS
+// ========================================
+
+export async function getScheduledEmailsController(
+  _req: Request,
+  res: Response,
+) {
+  try {
+
+    const emails = await getScheduledEmails();
+
+    return res.status(200).json({
+      count: emails.length,
+      emails,
+    });
+
+  } catch (error) {
+
+    console.error(
+      "getScheduledEmailsController error:",
+      error,
+    );
+
+    return res.status(500).json({
+      message: "Failed to fetch scheduled emails",
+    });
+  }
+}
+
+
+// ========================================
+// GET SENT EMAILS
+// ========================================
+
+export async function getSentEmailsController(
+  _req: Request,
+  res: Response,
+) {
+  try {
+
+    const emails = await getSentEmails();
+
+    return res.status(200).json({
+      count: emails.length,
+      emails,
+    });
+
+  } catch (error) {
+
+    console.error(
+      "getSentEmailsController error:",
+      error,
+    );
+
+    return res.status(500).json({
+      message: "Failed to fetch sent emails",
     });
   }
 }
