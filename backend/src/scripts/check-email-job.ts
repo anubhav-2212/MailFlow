@@ -32,9 +32,16 @@ async function main() {
     if (state === "delayed") {
       const delay = job.opts.delay ?? 0;
 
-      console.log(
-        `Runs in      : ${(delay / 1000).toFixed(1)} seconds`,
-      );
+      const remainingMs = Math.max(
+  0,
+  (job.timestamp ?? Date.now()) +
+    delay -
+    Date.now(),
+);
+
+console.log(
+  `Runs in      : ${(remainingMs / 1000).toFixed(1)} seconds`,
+);
     }
 
     console.log("----------------------------------------\n");
