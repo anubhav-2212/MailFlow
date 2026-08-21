@@ -50,3 +50,23 @@ export async function scheduleEmail(
     }
   );
 }
+export async function rescheduleEmail(
+  emailId: string,
+  scheduledAt: Date,
+) {
+  const delay = Math.max(
+    0,
+    scheduledAt.getTime() - Date.now(),
+  );
+
+  return emailQueue.add(
+    'send-email',
+    {
+      emailId,
+    },
+    {
+      jobId: `email-${emailId}-${scheduledAt.getTime()}`,
+      delay,
+    },
+  );
+}

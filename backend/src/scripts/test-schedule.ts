@@ -11,16 +11,16 @@ async function main() {
     orderBy: {
       createdAt: "desc",
     },
-    take: 3,
+    take: 6,
   });
 
-  if (emails.length < 3) {
+  if (emails.length < 6) {
     throw new Error(
-      `Expected 3 scheduled emails, but found ${emails.length}.`,
+      `Expected 6 scheduled emails, but found ${emails.length}.`,
     );
   }
 
-  console.log("\nScheduling 3 emails...\n");
+  console.log("\nScheduling 6 emails...\n");
 
   for (const email of emails) {
     const job = await scheduleEmail(
@@ -35,7 +35,7 @@ async function main() {
     });
   }
 
-  console.log("\nAll 3 jobs scheduled successfully.");
+  console.log("\nAll 6 jobs scheduled successfully.");
 }
 
 main()

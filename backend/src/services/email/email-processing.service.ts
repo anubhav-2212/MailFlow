@@ -5,6 +5,8 @@ import { withEmailSendThrottle } from './email-throttle.service.js';
 
 import { findEmailById, markEmailAsProcessingIfScheduled ,markEmailAsFailed,markEmailAsSent} from './email.repository.js';
 import {sendEmail} from './smtp.service.js';
+import { consumeHourlyEmailSlot } from './email-rate-limit.service.js';
+import { rescheduleEmail } from '../../queue/email.queues.js';
 
 interface ProcessEmailJobInput {
   emailId: string;
@@ -35,7 +37,22 @@ export async function processEmailSendingJob({
 
     return;
   }
+const rateLimit = await consumeHourlyEmailSlot();
 
+if (!rateLimit.allowed) {
+  logWarn('email.worker.hourly_limit_reached', {
+    jobId,
+    emailId,
+    limit: rateLimit.limit,
+    retryAt: rateLimit.retryAt,
+  });
+
+  if (rateLimit.retryAt) {
+    await rescheduleEmail(emailId, rateLimit.retryAt);
+  }
+
+  return;
+}
   const updateResult = await markEmailAsProcessingIfScheduled(emailId);
 
   if (updateResult.count === 0) {
