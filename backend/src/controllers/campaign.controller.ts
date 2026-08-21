@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Response } from "express";
 
 import {
   createCampaign,
@@ -6,17 +6,24 @@ import {
   getCampaignById,
 } from "../services/campaign.service.js";
 
+import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
+
 // ------------------------------------
 // Create Campaign
 // ------------------------------------
 
 export async function createCampaignController(
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
+
     const {
-      userId,
       subject,
       body,
       startTime,
@@ -24,19 +31,13 @@ export async function createCampaignController(
       hourlyLimit,
     } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({
-        message: "userId is required",
-      });
-    }
-
-    if (!subject) {
+    if (!subject?.trim()) {
       return res.status(400).json({
         message: "subject is required",
       });
     }
 
-    if (!body) {
+    if (!body?.trim()) {
       return res.status(400).json({
         message: "body is required",
       });
@@ -48,11 +49,25 @@ export async function createCampaignController(
       });
     }
 
+    const parsedStartTime = new Date(startTime);
+
+    if (Number.isNaN(parsedStartTime.getTime())) {
+      return res.status(400).json({
+        message: "startTime must be a valid date",
+      });
+    }
+
+    if (parsedStartTime.getTime() <= Date.now()) {
+      return res.status(400).json({
+        message: "startTime must be in the future",
+      });
+    }
+
     const campaign = await createCampaign({
-      userId,
-      subject,
-      body,
-      startTime: new Date(startTime),
+      userId: req.userId,
+      subject: subject.trim(),
+      body: body.trim(),
+      startTime: parsedStartTime,
       delayMs,
       hourlyLimit,
     });
@@ -78,19 +93,17 @@ export async function createCampaignController(
 // ------------------------------------
 
 export async function getCampaignsController(
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
-    const { userId } = req.query;
-
-    if (typeof userId !== "string") {
-      return res.status(400).json({
-        message: "userId query parameter is required",
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
       });
     }
 
-    const campaigns = await getCampaigns(userId);
+    const campaigns = await getCampaigns(req.userId);
 
     return res.status(200).json({
       count: campaigns.length,
@@ -113,23 +126,31 @@ export async function getCampaignsController(
 // ------------------------------------
 
 export async function getCampaignController(
-  req: Request<{ campaignId: string }>,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
-    const { campaignId } = req.params;
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
-    if (!campaignId) {
+    const campaignId = req.params.campaignId;
+
+    if (typeof campaignId !== "string") {
       return res.status(400).json({
-        message: "campaignId is required",
+        message: "Invalid campaign ID",
       });
     }
 
     const result = await getCampaignById(
       campaignId,
+      req.userId,
     );
 
     return res.status(200).json(result);
+    
   } catch (error) {
     console.error(
       "getCampaignController error:",
@@ -142,6 +163,17 @@ export async function getCampaignController(
     ) {
       return res.status(404).json({
         message: "Campaign not found",
+      });
+    }
+
+    if (
+      error instanceof Error &&
+      error.message ===
+        "Campaign does not belong to authenticated user"
+    ) {
+      return res.status(403).json({
+        message:
+          "You do not have access to this campaign",
       });
     }
 

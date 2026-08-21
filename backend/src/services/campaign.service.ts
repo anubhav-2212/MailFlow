@@ -56,6 +56,7 @@ export async function getCampaigns(
 
 export async function getCampaignById(
   campaignId: string,
+  userId: string,
 ) {
   const campaign = await prisma.campaign.findUnique({
     where: {
@@ -85,6 +86,13 @@ export async function getCampaignById(
 
   if (!campaign) {
     throw new Error("Campaign not found");
+  }
+
+  // Make sure the authenticated user owns this campaign
+  if (campaign.userId !== userId) {
+    throw new Error(
+      "Campaign does not belong to authenticated user",
+    );
   }
 
   // ------------------------------------
@@ -130,3 +138,6 @@ export async function getCampaignById(
     emails: campaign.emails,
   };
 }
+  // ------------------------------------
+  // Calculate email statistics
+  // ------------------------------------
