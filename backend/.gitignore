@@ -7,5 +7,3 @@ prisma/generated
 /generated/prisma
 dist/
 
-scripts/
-

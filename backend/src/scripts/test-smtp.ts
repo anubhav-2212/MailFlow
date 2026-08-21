@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.ETHEREAL_SMTP_PASSWORD,
   },
 });
-
+//h1
 const info = await transporter.sendMail({
   from: process.env.ETHEREAL_SMTP_USER,
   to: "test@example.com",

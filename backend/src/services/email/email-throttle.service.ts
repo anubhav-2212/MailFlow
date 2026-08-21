@@ -1,5 +1,8 @@
 import redisConnection from '../../config/redis.js';
 
+const LOCK_KEY = 'email:throttle:lock';
+const LAST_SEND_KEY = 'email:throttle:last-send';
+
 function getMinDelayMs() {
   const rawDelay = process.env.EMAIL_MIN_DELAY_MS ?? '2000';
   const parsedDelay = Number(rawDelay);
@@ -13,43 +16,78 @@ function getMinDelayMs() {
   return parsedDelay;
 }
 
-const LAST_SEND_KEY = 'email:throttle:next-send';
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-const RESERVE_NEXT_SEND_TIME_SCRIPT = `
-local key = KEYS[1]
-local now = tonumber(ARGV[1])
-local delay = tonumber(ARGV[2])
+async function acquireLock(lockValue: string) {
+  while (true) {
+    const acquired = await redisConnection.set(
+      LOCK_KEY,
+      lockValue,
+      'PX',
+      30_000,
+      'NX',
+    );
 
-local nextSend = tonumber(redis.call('GET', key) or '0')
+    if (acquired === 'OK') {
+      return;
+    }
 
-if nextSend < now then
-  nextSend = now
-end
+    await sleep(50);
+  }
+}
 
-local reservedTime = nextSend + delay
+async function releaseLock(lockValue: string) {
+  const script = `
+    if redis.call('GET', KEYS[1]) == ARGV[1] then
+      return redis.call('DEL', KEYS[1])
+    end
 
-redis.call('SET', key, reservedTime)
+    return 0
+  `;
 
-return nextSend
-`;
-
-export async function waitForMinimumSendDelay() {
-  const minDelayMs = getMinDelayMs();
-  const now = Date.now();
-
-  const allowedTime = Number(
-    await redisConnection.eval(
-      RESERVE_NEXT_SEND_TIME_SCRIPT,
-      1,
-      LAST_SEND_KEY,
-      now,
-      minDelayMs,
-    ),
+  await redisConnection.eval(
+    script,
+    1,
+    LOCK_KEY,
+    lockValue,
   );
+}
 
-  const waitMs = Math.max(0, allowedTime - now);
+export async function withEmailSendThrottle<T>(
+  send: () => Promise<T>,
+): Promise<T> {
+  const minDelayMs = getMinDelayMs();
+  const lockValue = `${process.pid}-${Date.now()}-${Math.random()}`;
 
-  if (waitMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  await acquireLock(lockValue);
+
+  try {
+    const lastSendRaw = await redisConnection.get(
+      LAST_SEND_KEY,
+    );
+
+    if (lastSendRaw) {
+      const lastSendTime = Number(lastSendRaw);
+      const elapsed = Date.now() - lastSendTime;
+
+      const remainingDelay = minDelayMs - elapsed;
+
+      if (remainingDelay > 0) {
+        await sleep(remainingDelay);
+      }
+    }
+
+    const result = await send();
+
+    await redisConnection.set(
+      LAST_SEND_KEY,
+      String(Date.now()),
+    );
+
+    return result;
+  } finally {
+    await releaseLock(lockValue);
   }
 }

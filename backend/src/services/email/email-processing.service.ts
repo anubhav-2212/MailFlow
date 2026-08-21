@@ -1,7 +1,7 @@
 import { EmailStatus } from '../../generated/prisma/enums.js';
 
 import { logInfo, logWarn } from '../../lib/logger.js';
-import { waitForMinimumSendDelay } from './email-throttle.service.js';
+import { withEmailSendThrottle } from './email-throttle.service.js';
 
 import { findEmailById, markEmailAsProcessingIfScheduled ,markEmailAsFailed,markEmailAsSent} from './email.repository.js';
 import {sendEmail} from './smtp.service.js';
@@ -55,14 +55,15 @@ export async function processEmailSendingJob({
     fromStatus: EmailStatus.SCHEDULED,
     toStatus: EmailStatus.PROCESSING,
   });
-  await waitForMinimumSendDelay();
-  try {
-    const result = await sendEmail({
-      from: email.sender.email,
-      to: email.recipient,
-      subject: email.subject,
-      text: email.body,
-    });
+  try{
+ const result = await withEmailSendThrottle(() =>
+  sendEmail({
+    from: email.sender.email,
+    to: email.recipient,
+    subject: email.subject,
+    text: email.body,
+  }),
+);
 
     await markEmailAsSent(emailId);
 
