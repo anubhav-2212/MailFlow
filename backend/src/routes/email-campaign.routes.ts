@@ -6,23 +6,26 @@ import {
   getSentEmailsController,
 } from "../controllers/email-campaign.controller.js";
 
+import { requireAuth } from "../middleware/auth.middleware.js";
+
 const emailcampaignRouter = Router();
 
 // Create campaign emails
 emailcampaignRouter.post(
   "/:campaignId/emails",
+  requireAuth,
   createCampaignEmailsController,
 );
 
-// Get scheduled emails
 emailcampaignRouter.get(
   "/scheduled",
+  requireAuth,
   getScheduledEmailsController,
 );
 
-// Get sent/failed emails
 emailcampaignRouter.get(
   "/sent",
+  requireAuth,
   getSentEmailsController,
 );
 

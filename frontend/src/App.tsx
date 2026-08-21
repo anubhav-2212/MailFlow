@@ -11,20 +11,9 @@ import CampaignsPage from './pages/CampaignsPage';
 import SendersPage from './pages/SenderPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import ScheduledEmailsPage from './pages/ScheduledEmailsPage';
+import SentEmailsPage from './pages/SentEmailsPage';
 
-function DashboardPlaceholder({ title }: { title: string }) {
-  return (
-    <section className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-        {title}
-      </h1>
 
-      <p className="mt-2 text-sm text-slate-500">
-        This section is ready for future dashboard content.
-      </p>
-    </section>
-  );
-}
 
 export default function App() {
   return (
@@ -82,9 +71,7 @@ export default function App() {
           {/* Sent */}
           <Route
             path="sent"
-            element={
-              <DashboardPlaceholder title="Sent" />
-            }
+            element={<SentEmailsPage />}
           />
         </Route>
       </Route>

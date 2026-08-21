@@ -1,8 +1,16 @@
-import { useAuth } from '../hooks/useAuth';
+import { useCallback, useEffect, useState } from 'react';
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+import { useAuth } from '../hooks/useAuth';
+import { getCampaigns } from '../api/campaign.api';
+import {
+  getScheduledEmails,
+  type ScheduledEmail,
+} from '../api/scheduled-email.api';
+import {
+  getSentEmails,
+  type SentEmail,
+} from '../api/sent-email.api';
+
 function UserAvatar({
   avatar,
   name,
@@ -14,31 +22,34 @@ function UserAvatar({
 }) {
   const sizeClass =
     size === 'lg'
-      ? 'w-14 h-14 text-xl'
+      ? 'h-14 w-14 text-xl'
       : size === 'md'
-      ? 'w-10 h-10 text-sm'
-      : 'w-8 h-8 text-xs';
+        ? 'h-10 w-10 text-sm'
+        : 'h-8 w-8 text-xs';
 
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials =
+    name
+      .trim()
+      .split(/\s+/)
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'U';
 
   if (avatar) {
     return (
       <img
         src={avatar}
         alt={name}
-        className={`${sizeClass} rounded-full object-cover ring-2 ring-white/10`}
+        className={`${sizeClass} rounded-full object-cover ring-2 ring-white`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClass} rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center font-semibold text-white ring-2 ring-white/10`}
+      className={`${sizeClass} flex items-center justify-center rounded-full bg-slate-950 font-semibold text-white`}
     >
       {initials}
     </div>
@@ -47,79 +58,423 @@ function UserAvatar({
 
 function StatCard({
   label,
-  sub,
+  value,
+  description,
+  icon,
 }: {
   label: string;
-  sub: string;
+  value: number;
+  description: string;
+  icon: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 flex flex-col gap-2 hover:border-indigo-500/40 hover:bg-white/[0.08] transition-all duration-200">
-      <span className="text-xs font-medium text-white/40 uppercase tracking-widest">{label}</span>
-      <span className="text-3xl font-bold text-white">—</span>
-      <span className="text-xs text-white/30">{sub}</span>
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            {label}
+          </p>
+
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+            {value}
+          </p>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {description}
+          </p>
+        </div>
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-lg">
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Dashboard overview page (rendered inside DashboardLayout via <Outlet />)
-// ---------------------------------------------------------------------------
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function getStatusClasses(
+  status: ScheduledEmail['status'] | SentEmail['status'],
+) {
+  switch (status) {
+    case 'SCHEDULED':
+      return 'border-amber-200 bg-amber-50 text-amber-700';
+
+    case 'PROCESSING':
+      return 'border-blue-200 bg-blue-50 text-blue-700';
+
+    case 'SENT':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+
+    case 'FAILED':
+      return 'border-rose-200 bg-rose-50 text-rose-700';
+
+    default:
+      return 'border-slate-200 bg-slate-100 text-slate-700';
+  }
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
 
+  const [campaignCount, setCampaignCount] = useState(0);
+  const [scheduledEmails, setScheduledEmails] = useState<
+    ScheduledEmail[]
+  >([]);
+  const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDashboard = useCallback(async () => {
+    if (!user?.id) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const [
+        campaignsResult,
+        scheduledResult,
+        sentResult,
+      ] = await Promise.all([
+        getCampaigns(user.id),
+        getScheduledEmails(),
+        getSentEmails(),
+      ]);
+
+      setCampaignCount(campaignsResult.length);
+      setScheduledEmails(scheduledResult);
+      setSentEmails(sentResult);
+    } catch (error) {
+      console.error(
+        'Failed to load dashboard:',
+        error,
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load dashboard data.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  const sentCount = sentEmails.filter(
+    (email) => email.status === 'SENT',
+  ).length;
+
+  const failedCount = sentEmails.filter(
+    (email) => email.status === 'FAILED',
+  ).length;
+
+  const recentScheduledEmails =
+    scheduledEmails.slice(0, 5);
+
+  const recentSentEmails =
+    sentEmails.slice(0, 5);
+
   return (
     <div className="space-y-8">
-      {/* Welcome banner */}
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-500/10 via-violet-500/5 to-transparent p-6 flex items-center gap-5">
-        <UserAvatar avatar={user?.avatar ?? null} name={user?.name ?? ''} size="lg" />
-        <div>
-          <p className="text-xs font-medium text-indigo-400 uppercase tracking-widest mb-1">
-            Welcome back
-          </p>
-          <h1 className="text-xl font-bold text-white">{user?.name}</h1>
-          <p className="text-sm text-white/50 mt-0.5">{user?.email}</p>
-        </div>
-      </div>
+      {/* Welcome */}
 
-      {/* Stat cards */}
-      <section aria-label="Summary statistics">
-        <h2 className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-4">
-          At a glance
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard label="Campaigns" sub="coming soon" />
-          <StatCard label="Scheduled" sub="coming soon" />
-          <StatCard label="Sent" sub="coming soon" />
+      <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+          <UserAvatar
+            avatar={user?.avatar ?? null}
+            name={user?.name ?? ''}
+            size="lg"
+          />
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Welcome back
+            </p>
+
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+              {user?.name}
+            </h1>
+
+            <p className="mt-1 text-sm text-slate-500">
+              {user?.email}
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Future section placeholders */}
-      {(['Campaigns', 'Scheduled Emails', 'Sent Emails'] as const).map((section) => (
-        <section key={section} aria-label={section}>
-          <h2 className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-4">
-            {section}
-          </h2>
-          <div className="rounded-2xl border border-white/8 border-dashed bg-white/[0.02] flex flex-col items-center justify-center py-16 gap-3">
-            <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-5 h-5 text-white/20"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-            </div>
-            <p className="text-sm text-white/25 font-medium">{section} will appear here</p>
+      {/* Error */}
+
+      {error ? (
+        <section className="rounded-3xl border border-rose-200 bg-rose-50 px-5 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-rose-700">
+              {error}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => void loadDashboard()}
+              className="w-fit rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Try again
+            </button>
           </div>
         </section>
-      ))}
+      ) : null}
+
+      {/* Statistics */}
+
+      <section aria-label="Dashboard statistics">
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            Overview
+          </p>
+
+          <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">
+            Email activity
+          </h2>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Campaigns"
+            value={isLoading ? 0 : campaignCount}
+            description="Total campaigns"
+            icon="◉"
+          />
+
+          <StatCard
+            label="Scheduled"
+            value={
+              isLoading
+                ? 0
+                : scheduledEmails.length
+            }
+            description="Waiting to be sent"
+            icon="◷"
+          />
+
+          <StatCard
+            label="Sent"
+            value={isLoading ? 0 : sentCount}
+            description="Successfully delivered"
+            icon="✓"
+          />
+
+          <StatCard
+            label="Failed"
+            value={isLoading ? 0 : failedCount}
+            description="Failed email attempts"
+            icon="!"
+          />
+        </div>
+      </section>
+
+      {/* Recent scheduled */}
+
+      <section>
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Scheduler
+            </p>
+
+            <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">
+              Upcoming emails
+            </h2>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-10 text-center">
+            <p className="text-sm text-slate-500">
+              Loading scheduled emails...
+            </p>
+          </div>
+        ) : recentScheduledEmails.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+            <p className="text-sm font-medium text-slate-600">
+              No scheduled emails
+            </p>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Your upcoming emails will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-5 py-3">
+                      Recipient
+                    </th>
+
+                    <th className="px-5 py-3">
+                      Subject
+                    </th>
+
+                    <th className="px-5 py-3">
+                      Scheduled
+                    </th>
+
+                    <th className="px-5 py-3">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {recentScheduledEmails.map(
+                    (email) => (
+                      <tr key={email.id}>
+                        <td className="px-5 py-4 text-sm font-medium text-slate-950">
+                          {email.recipient}
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {email.subject}
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {formatDateTime(
+                            email.scheduledAt,
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={[
+                              'inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              getStatusClasses(
+                                email.status,
+                              ),
+                            ].join(' ')}
+                          >
+                            {email.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Recent sent */}
+
+      <section>
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            History
+          </p>
+
+          <h2 className="mt-1 text-lg font-semibold tracking-tight text-slate-950">
+            Recent sent emails
+          </h2>
+        </div>
+
+        {isLoading ? (
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-10 text-center">
+            <p className="text-sm text-slate-500">
+              Loading sent emails...
+            </p>
+          </div>
+        ) : recentSentEmails.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+            <p className="text-sm font-medium text-slate-600">
+              No sent emails yet
+            </p>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Sent email history will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr className="text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-5 py-3">
+                      Recipient
+                    </th>
+
+                    <th className="px-5 py-3">
+                      Subject
+                    </th>
+
+                    <th className="px-5 py-3">
+                      Sent
+                    </th>
+
+                    <th className="px-5 py-3">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {recentSentEmails.map(
+                    (email) => (
+                      <tr key={email.id}>
+                        <td className="px-5 py-4 text-sm font-medium text-slate-950">
+                          {email.recipient}
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {email.subject}
+                        </td>
+
+                        <td className="px-5 py-4 text-sm text-slate-600">
+                          {formatDateTime(
+                            email.sentAt,
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={[
+                              'inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              getStatusClasses(
+                                email.status,
+                              ),
+                            ].join(' ')}
+                          >
+                            {email.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

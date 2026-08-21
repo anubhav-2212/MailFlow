@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Response } from "express";
 
 import {
   createCampaignEmails,
@@ -6,22 +6,32 @@ import {
   getSentEmails,
 } from "../services/email/email-campaign.service.js";
 
+import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 
 // ========================================
 // CREATE CAMPAIGN EMAILS
 // ========================================
 
 export async function createCampaignEmailsController(
-  req: Request<{ campaignId: string }>,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
-    const { campaignId } = req.params;
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
-    const {
-      senderId,
-      recipients,
-    } = req.body;
+    const campaignId = req.params.campaignId;
+
+if (typeof campaignId !== "string") {
+  return res.status(400).json({
+    message: "Invalid campaign ID",
+  });
+}
+
+    const { senderId, recipients } = req.body;
 
     if (!senderId) {
       return res.status(400).json({
@@ -39,6 +49,7 @@ export async function createCampaignEmailsController(
       campaignId,
       senderId,
       recipients,
+      userId: req.userId,
     });
 
     return res.status(201).json({
@@ -46,9 +57,7 @@ export async function createCampaignEmailsController(
       count: emails.length,
       emails,
     });
-
   } catch (error) {
-
     console.error(
       "createCampaignEmailsController error:",
       error,
@@ -69,8 +78,9 @@ export async function createCampaignEmailsController(
     }
 
     if (
-      message ===
-      "Sender does not belong to campaign owner"
+      message === "Campaign does not belong to authenticated user" ||
+      message === "Sender does not belong to authenticated user" ||
+      message === "Sender does not belong to campaign owner"
     ) {
       return res.status(403).json({
         message,
@@ -83,26 +93,28 @@ export async function createCampaignEmailsController(
   }
 }
 
-
 // ========================================
 // GET SCHEDULED EMAILS
 // ========================================
 
 export async function getScheduledEmailsController(
-  _req: Request,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
-    const emails = await getScheduledEmails();
+    const emails = await getScheduledEmails(req.userId);
 
     return res.status(200).json({
       count: emails.length,
       emails,
     });
-
   } catch (error) {
-
     console.error(
       "getScheduledEmailsController error:",
       error,
@@ -114,26 +126,28 @@ export async function getScheduledEmailsController(
   }
 }
 
-
 // ========================================
 // GET SENT EMAILS
 // ========================================
 
 export async function getSentEmailsController(
-  _req: Request,
+  req: AuthenticatedRequest,
   res: Response,
 ) {
   try {
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
 
-    const emails = await getSentEmails();
+    const emails = await getSentEmails(req.userId);
 
     return res.status(200).json({
       count: emails.length,
       emails,
     });
-
   } catch (error) {
-
     console.error(
       "getSentEmailsController error:",
       error,

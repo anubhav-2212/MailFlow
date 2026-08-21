@@ -5,6 +5,7 @@ interface CreateCampaignEmailsInput {
   campaignId: string;
   senderId: string;
   recipients: string[];
+  userId: string;
 }
 
 export async function createCampaignEmails(
@@ -94,10 +95,13 @@ export async function createCampaignEmails(
 
   return emails;
 }
-export async function getScheduledEmails() {
+export async function getScheduledEmails(userId: string) {
   return prisma.email.findMany({
     where: {
       status: "SCHEDULED",
+      campaign: {
+        userId,
+      },
     },
 
     include: {
@@ -111,11 +115,14 @@ export async function getScheduledEmails() {
   });
 }
 
-export async function getSentEmails() {
+export async function getSentEmails(userId: string) {
   return prisma.email.findMany({
     where: {
       status: {
         in: ["SENT", "FAILED"],
+      },
+      campaign: {
+        userId,
       },
     },
 
