@@ -27,9 +27,10 @@ export async function markEmailAsProcessingIfScheduled(emailId: string) {
 }
 //markEmail as sent if the email is succefully sent
 export async function markEmailAsSent(emailId: string) {
-  return prisma.email.update({
+  return prisma.email.updateMany({
     where: {
       id: emailId,
+      status: EmailStatus.PROCESSING,
     },
     data: {
       status: EmailStatus.SENT,
@@ -39,18 +40,34 @@ export async function markEmailAsSent(emailId: string) {
   });
 }
 
-//mark email as failed if the email has failed to send
 export async function markEmailAsFailed(
   emailId: string,
   error: string,
 ) {
-  return prisma.email.update({
+  return prisma.email.updateMany({
     where: {
       id: emailId,
+      status: EmailStatus.PROCESSING,
     },
     data: {
       status: EmailStatus.FAILED,
       error,
+    },
+  });
+}
+export async function markEmailAsScheduled(
+  emailId: string,
+  scheduledAt: Date,
+) {
+  return prisma.email.updateMany({
+    where: {
+      id: emailId,
+      status: EmailStatus.PROCESSING,
+    },
+
+    data: {
+      status: EmailStatus.SCHEDULED,
+      scheduledAt,
     },
   });
 }
