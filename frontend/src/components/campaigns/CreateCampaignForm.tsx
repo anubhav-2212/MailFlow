@@ -75,6 +75,7 @@ export default function CreateCampaignForm({
   onSuccess,
 }: CreateCampaignFormProps) {
   const { user } = useAuth();
+  console.log("AUTH USER:", user);
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -120,7 +121,6 @@ export default function CreateCampaignForm({
 
     try {
       await createCampaign({
-        userId: user.id,
         subject: values.subject.trim(),
         body: values.body.trim(),
         startTime: new Date(values.startTime).toISOString(),

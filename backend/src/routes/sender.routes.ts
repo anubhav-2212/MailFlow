@@ -1,8 +1,12 @@
 import { Router } from "express";
 
-import { createSenderController } from "../controllers/sender.controller.js";
+import {
+  createSenderController,
+  getSendersController,
+} from "../controllers/sender.controller.js";
 
 export const senderRouter = Router();
 
-senderRouter.post("/",  createSenderController);
+senderRouter.post("/", createSenderController);
 
+senderRouter.get("/", getSendersController);

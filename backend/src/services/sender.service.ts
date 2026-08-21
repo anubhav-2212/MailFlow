@@ -21,3 +21,21 @@ export async function createSender(
     },
   });
 }
+
+export async function getSenders(userId: string) {
+  return prisma.sender.findMany({
+    where: {
+      userId,
+    },
+    select: {
+      id: true,
+      email: true,
+      hourlyLimit: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+}

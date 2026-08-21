@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
 
-import { createSender } from "../services/sender.service.js";
+import {
+  createSender,
+  getSenders,
+} from "../services/sender.service.js";
+
+import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 
 export async function createSenderController(
   req: Request,
@@ -15,7 +20,6 @@ export async function createSenderController(
       hourlyLimit,
     } = req.body;
 
-    // Validation
     if (!userId) {
       return res.status(400).json({
         message: "userId is required",
@@ -60,6 +64,34 @@ export async function createSenderController(
 
     return res.status(500).json({
       message: "Failed to create sender",
+    });
+  }
+}
+
+export async function getSendersController(
+  req: AuthenticatedRequest,
+  res: Response,
+) {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
+
+    const senders = await getSenders(req.userId);
+
+    return res.status(200).json({
+      senders,
+    });
+  } catch (error) {
+    console.error(
+      "getSendersController error:",
+      error,
+    );
+
+    return res.status(500).json({
+      message: "Failed to fetch senders",
     });
   }
 }
