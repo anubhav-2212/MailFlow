@@ -215,18 +215,18 @@ export type UserOrderByWithRelationInput = {
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
-  id?: string
-  googleId?: string
-  email?: string
-  AND?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
-  OR?: Prisma.UserWhereInput[]
-  NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[]
-  name?: Prisma.StringFilter<"User"> | string
-  avatar?: Prisma.StringNullableFilter<"User"> | string | null
-  createdAt?: Prisma.DateTimeFilter<"User"> | Date | string
-  updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string
-  campaigns?: Prisma.CampaignListRelationFilter
-  senders?: Prisma.SenderListRelationFilter
+  id?: string | undefined
+  googleId?: string | undefined
+  email?: string | undefined
+  AND?: Prisma.UserWhereInput | Prisma.UserWhereInput[] | undefined
+  OR?: Prisma.UserWhereInput[] | undefined
+  NOT?: Prisma.UserWhereInput | Prisma.UserWhereInput[] | undefined
+  name?: Prisma.StringFilter<"User"> | string | undefined
+  avatar?: Prisma.StringNullableFilter<"User"> | string | null | undefined
+  createdAt?: Prisma.DateTimeFilter<"User"> | Date | string | undefined
+  updatedAt?: Prisma.DateTimeFilter<"User"> | Date | string | undefined
+  campaigns?: Prisma.CampaignListRelationFilter | undefined
+  senders?: Prisma.SenderListRelationFilter | undefined
 }, "id" | "googleId" | "email">
 
 export type UserOrderByWithAggregationInput = {

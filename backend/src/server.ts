@@ -7,13 +7,19 @@ import { senderRouter } from "./routes/sender.routes.js";
 import emailcampaignRouter from "./routes/email-campaign.routes.js";
 import passport from "./config/passport.js";
 import authRouter from "./routes/auth.routes.js";
+import cookieParser from "cookie-parser";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL ?? "http://localhost:5173",
+    credentials: true,
+  }),
+);
 app.use(passport.initialize());
-
+app.use(cookieParser());
 // campaign routes
 app.use("/api/v1/campaigns", campaignRouter);
 app.use("/api/v1/sender",senderRouter);
