@@ -1,11 +1,27 @@
-const App = () => {
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <h1 className="text-4xl font-bold text-blue-600">
-        ReachInbox
-      </h1>
-    </div>
-  );
-};
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { PrivateRoute } from './router/PrivateRoute';
+import { PublicRoute } from './router/PublicRoute';
+import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
 
-export default App;
+export default function App() {
+  return (
+    <Routes>
+      {/* Root → always send to /login; guards handle the rest */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+
+      {/* Public-only: redirect authenticated users to /dashboard */}
+      <Route element={<PublicRoute />}>
+        <Route path="/login" element={<LoginPage />} />
+      </Route>
+
+      {/* Private: redirect unauthenticated users to /login */}
+      <Route element={<PrivateRoute />}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+      </Route>
+
+      {/* Fallback for unknown paths */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+}
