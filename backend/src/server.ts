@@ -12,7 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
 // campaign routes
-app.use("/api/v1/campaign", campaignRouter);
+app.use("/api/v1/campaigns", campaignRouter);
 app.use("/api/v1/sender",senderRouter);
 app.use("/api/v1/email-campaign",emailcampaignRouter);
 
