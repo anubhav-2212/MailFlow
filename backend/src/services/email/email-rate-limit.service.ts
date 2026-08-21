@@ -2,6 +2,7 @@ import redisConnection from '../../config/redis.js';
 
 function getMaxEmailsPerHour() {
   const rawLimit = process.env.EMAIL_MAX_PER_HOUR ?? '200';
+
   const parsedLimit = Number(rawLimit);
 
   if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
@@ -24,17 +25,26 @@ function getHourWindow() {
   ].join('-');
 }
 
-export async function consumeHourlyEmailSlot() {
+export async function consumeHourlyEmailSlot(
+  senderId: string,
+) {
   const limit = getMaxEmailsPerHour();
+
   const window = getHourWindow();
 
-  const key = `email:rate-limit:${window}`;
+  // Each sender gets its own Redis counter.
+  const key = `email:rate-limit:${senderId}:${window}`;
 
   const count = await redisConnection.incr(key);
 
+  // Set expiry only when the key is created.
   if (count === 1) {
     await redisConnection.expire(key, 60 * 60);
   }
+
+  // ----------------------------------------
+  // Limit not reached
+  // ----------------------------------------
 
   if (count <= limit) {
     return {
@@ -45,12 +55,23 @@ export async function consumeHourlyEmailSlot() {
     };
   }
 
+  // ----------------------------------------
+  // Limit reached
+  // ----------------------------------------
+  //
+  // Undo the increment because this email
+  // did not actually consume a sending slot.
+  //
+
   await redisConnection.decr(key);
 
+  // Next UTC hour
   const nextHour = new Date();
 
   nextHour.setUTCMinutes(0, 0, 0);
-  nextHour.setUTCHours(nextHour.getUTCHours() + 1);
+  nextHour.setUTCHours(
+    nextHour.getUTCHours() + 1,
+  );
 
   return {
     allowed: false,

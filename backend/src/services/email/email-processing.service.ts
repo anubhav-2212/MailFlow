@@ -7,9 +7,9 @@ import { withEmailSendThrottle } from './email-throttle.service.js';
 import {
   findEmailById,
   markEmailAsProcessingIfScheduled,
-  markEmailAsScheduled,
   markEmailAsFailed,
   markEmailAsSent,
+  markEmailAsScheduled,
 } from './email.repository.js';
 
 import { sendEmail } from './smtp.service.js';
@@ -28,9 +28,9 @@ export async function processEmailSendingJob({
   jobId,
 }: ProcessEmailJobInput) {
 
-  // -----------------------------------------
+  // ----------------------------------------
   // 1. Find email
-  // -----------------------------------------
+  // ----------------------------------------
 
   const email = await findEmailById(emailId);
 
@@ -43,23 +43,9 @@ export async function processEmailSendingJob({
     return;
   }
 
-  // -----------------------------------------
-  // 2. Idempotency check
-  // -----------------------------------------
-  // If this email has already been sent,
-  // NEVER attempt to send it again.
-  // -----------------------------------------
-
-  if (email.status === EmailStatus.SENT) {
-    logWarn('email.worker.email_already_sent', {
-      jobId,
-      emailId,
-    });
-
-    return;
-  }
-
-  // Only SCHEDULED emails can enter processing.
+  // ----------------------------------------
+  // 2. Only SCHEDULED emails can be processed
+  // ----------------------------------------
 
   if (email.status !== EmailStatus.SCHEDULED) {
     logWarn('email.worker.email_not_scheduled', {
@@ -71,15 +57,13 @@ export async function processEmailSendingJob({
     return;
   }
 
-  // -----------------------------------------
+  // ----------------------------------------
   // 3. Atomically claim the email
-  // -----------------------------------------
   //
   // SCHEDULED → PROCESSING
   //
-  // This prevents two workers from processing
-  // the same email simultaneously.
-  // -----------------------------------------
+  // This protects against duplicate jobs.
+  // ----------------------------------------
 
   const updateResult =
     await markEmailAsProcessingIfScheduled(emailId);
@@ -105,17 +89,20 @@ export async function processEmailSendingJob({
     toStatus: EmailStatus.PROCESSING,
   });
 
-  // -----------------------------------------
-  // 4. Check hourly rate limit
-  // -----------------------------------------
+  // ----------------------------------------
+  // 4. Check PER-SENDER hourly limit
+  // ----------------------------------------
 
-  const rateLimit = await consumeHourlyEmailSlot();
+  const rateLimit = await consumeHourlyEmailSlot(
+    email.senderId,
+  );
 
   if (!rateLimit.allowed) {
 
     logWarn('email.worker.hourly_limit_reached', {
       jobId,
       emailId,
+      senderId: email.senderId,
       limit: rateLimit.limit,
       retryAt: rateLimit.retryAt,
     });
@@ -123,72 +110,69 @@ export async function processEmailSendingJob({
     if (rateLimit.retryAt) {
 
       // PROCESSING → SCHEDULED
-      //
-      // We put the email back into a schedulable
-      // state before creating the delayed job.
 
       await markEmailAsScheduled(
         emailId,
         rateLimit.retryAt,
       );
 
-      // Create delayed BullMQ job.
+      // Schedule the email for the next hour
 
       await rescheduleEmail(
         emailId,
         rateLimit.retryAt,
       );
 
-      logInfo('email.worker.email_rescheduled', {
-        jobId,
-        emailId,
-        retryAt: rateLimit.retryAt,
-        reason: 'HOURLY_LIMIT',
-      });
+      logInfo(
+        'email.worker.email_rescheduled',
+        {
+          jobId,
+          emailId,
+          senderId: email.senderId,
+          retryAt: rateLimit.retryAt,
+          reason: 'HOURLY_LIMIT',
+        },
+      );
     }
 
     return;
   }
 
-  // -----------------------------------------
+  // ----------------------------------------
   // 5. Send email
-  // -----------------------------------------
+  // ----------------------------------------
 
   try {
 
-    const result = await withEmailSendThrottle(() =>
-      sendEmail({
-        from: email.sender.email,
-        to: email.recipient,
-        subject: email.subject,
-        text: email.body,
-      }),
+    const result = await withEmailSendThrottle(
+      () =>
+        sendEmail({
+          from: email.sender.email,
+          to: email.recipient,
+          subject: email.subject,
+          text: email.body,
+        }),
     );
 
-    // ---------------------------------------
-    // 6. Mark as SENT
-    // ---------------------------------------
-    //
-    // PROCESSING → SENT
-    //
-    // This transition should be atomic inside
-    // the repository.
-    // ---------------------------------------
+    // --------------------------------------
+    // 6. PROCESSING → SENT
+    // --------------------------------------
 
     await markEmailAsSent(emailId);
 
     logInfo('email.worker.email_sent', {
       jobId,
       emailId,
+      senderId: email.senderId,
       messageId: result.messageId,
       previewUrl: result.previewUrl,
     });
 
   } catch (error) {
 
-    // ---------------------------------------
-    // 7. Mark as FAILED
-    // ---------------------------------------
+    // --------------------------------------
+    // 7. PROCESSING → FAILED
+    // --------------------------------------
 
     const errorMessage =
       error instanceof Error
@@ -203,11 +187,11 @@ export async function processEmailSendingJob({
     logWarn('email.worker.email_failed', {
       jobId,
       emailId,
+      senderId: email.senderId,
       error: errorMessage,
     });
 
-    // Throw so BullMQ knows the job failed
-    // and can apply its retry policy.
+    // Let BullMQ handle the failed job
 
     throw error;
   }
