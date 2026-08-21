@@ -2,8 +2,8 @@ import { EmailStatus } from '../../generated/prisma/enums.js';
 
 import { logInfo, logWarn } from '../../lib/logger.js';
 
-import { findEmailById, markEmailAsProcessingIfScheduled } from './email.repository.js';
-
+import { findEmailById, markEmailAsProcessingIfScheduled ,markEmailAsFailed,markEmailAsSent} from './email.repository.js';
+import {sendEmail} from './smtp.service.js';
 interface ProcessEmailJobInput {
   emailId: string;
   jobId: string;
@@ -53,4 +53,28 @@ export async function processEmailSendingJob({
     fromStatus: EmailStatus.SCHEDULED,
     toStatus: EmailStatus.PROCESSING,
   });
+  try {
+    const result = await sendEmail({
+      from: email.senderId,
+      to: email.recipient,
+      subject: email.subject,
+      text: email.body,
+    });
+
+    await markEmailAsSent(emailId);
+
+    logInfo('email.worker.email_sent', {
+      jobId,
+      emailId,
+      messageId: result.messageId,
+      previewUrl: result.previewUrl,
+    });
+  } catch (error) {
+    await markEmailAsFailed(
+      emailId,
+      error instanceof Error ? error.message : 'Unknown email error',
+    );
+
+    throw error;
+  }
 }
