@@ -29,3 +29,24 @@ export const emailQueue = new Queue<SendEmailJobData>(
     },
   },
 );
+
+export async function scheduleEmail(
+  emailId: string,
+  scheduledAt: Date
+) {
+  const delay = Math.max(
+    0,
+    scheduledAt.getTime() - Date.now()
+  );
+
+  return emailQueue.add(
+    "send-email",
+    {
+      emailId,
+    },
+    {
+      jobId: `email:${emailId}`,
+      delay,
+    }
+  );
+}
