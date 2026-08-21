@@ -17,16 +17,16 @@ export interface CampaignEmail {
   updatedAt: string;
 }
 
-interface CreateCampaignEmailsResponse {
-  message: string;
-  count: number;
-  emails: CampaignEmail[];
-}
-
 export interface CreateCampaignEmailsInput {
   campaignId: string;
   senderId: string;
   recipients: string[];
+}
+
+export interface CreateCampaignEmailsResponse {
+  message: string;
+  count: number;
+  emails: CampaignEmail[];
 }
 
 export async function createCampaignEmails(

@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createCampaign } from '../../api/campaign.api';
+import { createCampaignEmails } from '../../api/email-campaign.api';
+import { getSenders, type Sender } from '../../api/sender.api';
 import { useAuth } from '../../hooks/useAuth';
 
 type FormValues = {
@@ -78,8 +80,6 @@ export default function CreateCampaignForm({
 }: CreateCampaignFormProps) {
   const { user } = useAuth();
 
-  console.log('AUTH USER:', user);
-
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -93,6 +93,48 @@ export default function CreateCampaignForm({
   const [recipients, setRecipients] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+
+  // --------------------------------------------------
+  // Sender state
+  // --------------------------------------------------
+
+  const [senders, setSenders] = useState<Sender[]>([]);
+  const [selectedSenderId, setSelectedSenderId] = useState('');
+  const [senderError, setSenderError] = useState<string | null>(null);
+  const [isLoadingSenders, setIsLoadingSenders] = useState(true);
+
+  // --------------------------------------------------
+  // Load senders
+  // --------------------------------------------------
+
+  useEffect(() => {
+    async function loadSenders() {
+      setIsLoadingSenders(true);
+      setSenderError(null);
+
+      try {
+        const result = await getSenders();
+        setSenders(result);
+
+        if (result.length === 0) {
+          setSenderError(
+            'No senders found. Please add a sender before creating a campaign.',
+          );
+        }
+      } catch (error) {
+        console.error('Failed to load senders:', error);
+        setSenderError('Unable to load senders right now.');
+      } finally {
+        setIsLoadingSenders(false);
+      }
+    }
+
+    void loadSenders();
+  }, []);
+
+  // --------------------------------------------------
+  // Form change
+  // --------------------------------------------------
 
   function handleChange(
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -129,6 +171,7 @@ export default function CreateCampaignForm({
     setFileName(file.name);
     setFileError(null);
     setRecipients([]);
+    setSubmitError(null);
 
     file
       .text()
@@ -186,10 +229,23 @@ export default function CreateCampaignForm({
       return;
     }
 
+    if (!selectedSenderId) {
+      setSubmitError('Please select a sender.');
+      return;
+    }
+
+    if (recipients.length === 0) {
+      setSubmitError(
+        'Please upload a CSV or TXT file containing email addresses.',
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      await createCampaign({
+      // 1. Create campaign
+      const campaign = await createCampaign({
         userId: user.id,
         subject: values.subject.trim(),
         body: values.body.trim(),
@@ -200,14 +256,24 @@ export default function CreateCampaignForm({
         hourlyLimit: Number(values.hourlyLimit),
       });
 
+      // 2. Create scheduled emails for the campaign
+      await createCampaignEmails({
+        campaignId: campaign.id,
+        senderId: selectedSenderId,
+        recipients,
+      });
+
+      // 3. Reset form
       setValues(initialValues);
       setErrors({});
       setRecipients([]);
       setFileName(null);
       setFileError(null);
+      setSelectedSenderId('');
+      setSubmitError(null);
 
       setSuccessMessage(
-        'Campaign created successfully.',
+        `Campaign created successfully with ${recipients.length} email${recipients.length === 1 ? '' : 's'}.`,
       );
 
       await onSuccess?.();
@@ -226,8 +292,8 @@ export default function CreateCampaignForm({
         </h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Set the campaign details and sending schedule.
-          Recipients will be added later.
+          Set the campaign details, sender, recipients, and
+          sending schedule.
         </p>
       </div>
 
@@ -344,6 +410,52 @@ export default function CreateCampaignForm({
           {fileError ? (
             <p className="mt-2 text-sm text-rose-600">
               {fileError}
+            </p>
+          ) : null}
+        </div>
+
+        {/* Sender */}
+
+        <div>
+          <label
+            htmlFor="sender"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Sender
+          </label>
+
+          <select
+            id="sender"
+            value={selectedSenderId}
+            onChange={(event) => {
+              setSelectedSenderId(event.target.value);
+              setSenderError(null);
+              setSubmitError(null);
+            }}
+            disabled={isLoadingSenders || senders.length === 0}
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100"
+          >
+            <option value="">
+              {isLoadingSenders
+                ? 'Loading senders...'
+                : senders.length === 0
+                  ? 'No senders available'
+                  : 'Select a sender'}
+            </option>
+
+            {senders.map((sender) => (
+              <option
+                key={sender.id}
+                value={sender.id}
+              >
+                {sender.email} — {sender.hourlyLimit}/hour
+              </option>
+            ))}
+          </select>
+
+          {senderError ? (
+            <p className="mt-2 text-sm text-rose-600">
+              {senderError}
             </p>
           ) : null}
         </div>
