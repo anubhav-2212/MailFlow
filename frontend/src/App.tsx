@@ -3,6 +3,7 @@ import { PrivateRoute } from './router/PrivateRoute';
 import { PublicRoute } from './router/PublicRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import LoginPage from './pages/LoginPage';
+import CampaignsPage from './pages/CampaignsPage';
 import DashboardPage from './pages/DashboardPage';
 
 function DashboardPlaceholder({ title }: { title: string }) {
@@ -31,7 +32,7 @@ export default function App() {
       <Route element={<PrivateRoute />}>
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="campaigns" element={<DashboardPlaceholder title="Campaigns" />} />
+          <Route path="campaigns" element={<CampaignsPage />} />
           <Route path="scheduled" element={<DashboardPlaceholder title="Scheduled" />} />
           <Route path="sent" element={<DashboardPlaceholder title="Sent" />} />
         </Route>
