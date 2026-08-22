@@ -27,6 +27,13 @@ app.use("/api/v1/email-campaign",emailcampaignRouter);
 app.use("/api/v1/auth", authRouter);
 
 const PORT = process.env.PORT != null ? Number(process.env.PORT) : 3000;
+//health check route
+app.get("/", (_req, res) => {
+  return res.status(200).json({
+    status: "ok",
+    service: "ReachInbox API",
+  });
+});
 
 app.listen(PORT, "0.0.0.0", () => {
   logInfo("server.booted", {
