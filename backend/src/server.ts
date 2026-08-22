@@ -18,6 +18,7 @@ app.use(
     credentials: true,
   }),
 );
+
 app.use(passport.initialize());
 app.use(cookieParser());
 // campaign routes

@@ -41,13 +41,14 @@ authRouter.get(
 
     const token = createAuthToken(user.id);
 
+    // Production frontend (Vercel) and backend (Render)
+    // are different origins, so the cookie must support
+    // cross-site requests.
     res.cookie("auth_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite:
-        process.env.NODE_ENV === "production"
-          ? "none"
-          : "lax",
+      secure: true,
+      sameSite: "none",
+      path: "/",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -55,9 +56,7 @@ authRouter.get(
       process.env.FRONTEND_URL ??
       "http://localhost:5173";
 
-    return res.redirect(
-      `${frontendUrl}/dashboard`,
-    );
+    return res.redirect(`${frontendUrl}/dashboard`);
   },
 );
 
@@ -73,16 +72,16 @@ authRouter.get(
     res,
   ) => {
     if (!req.userId) {
-        return res.status(401).json({
+      return res.status(401).json({
         message: "Authentication required",
       });
     }
+
     try {
       const user = await prisma.user.findUnique({
         where: {
           id: req.userId,
         },
-
         select: {
           id: true,
           email: true,
@@ -122,11 +121,9 @@ authRouter.post(
   (_req, res) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite:
-        process.env.NODE_ENV === "production"
-          ? "none"
-          : "lax",
+      secure: true,
+      sameSite: "none",
+      path: "/",
     });
 
     return res.status(200).json({
