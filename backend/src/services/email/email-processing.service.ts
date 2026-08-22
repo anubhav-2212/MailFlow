@@ -95,6 +95,7 @@ export async function processEmailSendingJob({
 
   const rateLimit = await consumeHourlyEmailSlot(
     email.senderId,
+    email.campaign.hourlyLimit, 
   );
 
   if (!rateLimit.allowed) {

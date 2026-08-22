@@ -10,6 +10,7 @@ export async function findEmailById(emailId: string) {
     },
     include: {
       sender: true,
+      campaign: true,
     },
   });
 }

@@ -49,6 +49,7 @@ async function main() {
   for (let i = 1; i <= 3; i++) {
     const result = await consumeHourlyEmailSlot(
       senderA.id,
+      200
     );
 
     console.log(
@@ -67,6 +68,7 @@ async function main() {
   for (let i = 1; i <= 3; i++) {
     const result = await consumeHourlyEmailSlot(
       senderB.id,
+      200
     );
 
     console.log(
