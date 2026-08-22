@@ -28,10 +28,10 @@ app.use("/api/v1/auth", authRouter);
 
 const PORT = process.env.PORT != null ? Number(process.env.PORT) : 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   logInfo("server.booted", {
     port: PORT,
   });
-}); 
+});
 
 export default app;
