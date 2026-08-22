@@ -4,7 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
 
-    "rootDir": ".",
+    "rootDir": "./src",
     "outDir": "./dist",
 
     "strict": true,
@@ -20,10 +20,11 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
+
   "include": [
-    "src/**/*.ts",
-    "prisma/**/*.ts"
+    "src/**/*.ts"
   ],
+
   "exclude": [
     "node_modules",
     "dist"
