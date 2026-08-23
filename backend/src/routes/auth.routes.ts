@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import passport from "../config/passport.js";
 import { createAuthToken } from "../config/auth.js";
 import {
@@ -31,7 +31,7 @@ authRouter.get(
     session: false,
     failureRedirect: "/api/v1/auth/login-failed",
   }),
-  (req, res) => {
+  (req: Request, res: Response) => {
     const user = req.user as {
       id: string;
       email: string;
@@ -41,9 +41,6 @@ authRouter.get(
 
     const token = createAuthToken(user.id);
 
-    // Production frontend (Vercel) and backend (Render)
-    // are different origins, so the cookie must support
-    // cross-site requests.
     res.cookie("auth_token", token, {
       httpOnly: true,
       secure: true,
@@ -53,8 +50,7 @@ authRouter.get(
     });
 
     const frontendUrl =
-      process.env.FRONTEND_URL ??
-      "http://localhost:5173";
+      process.env.FRONTEND_URL ?? "http://localhost:5173";
 
     return res.redirect(`${frontendUrl}/dashboard`);
   },
@@ -67,10 +63,7 @@ authRouter.get(
 authRouter.get(
   "/me",
   requireAuth,
-  async (
-    req: AuthenticatedRequest,
-    res,
-  ) => {
+  async (req: AuthenticatedRequest, res: Response) => {
     if (!req.userId) {
       return res.status(401).json({
         message: "Authentication required",
@@ -100,10 +93,7 @@ authRouter.get(
         user,
       });
     } catch (error) {
-      console.error(
-        "getCurrentUser error:",
-        error,
-      );
+      console.error("getCurrentUser error:", error);
 
       return res.status(500).json({
         message: "Failed to fetch authenticated user",
@@ -118,7 +108,7 @@ authRouter.get(
 
 authRouter.post(
   "/logout",
-  (_req, res) => {
+  (_req: Request, res: Response) => {
     res.clearCookie("auth_token", {
       httpOnly: true,
       secure: true,
@@ -138,8 +128,8 @@ authRouter.post(
 
 authRouter.get(
   "/login-failed",
-  (_req, res) => {
-    res.status(401).json({
+  (_req: Request, res: Response) => {
+    return res.status(401).json({
       message: "Google authentication failed",
     });
   },
