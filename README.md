@@ -3,7 +3,7 @@
 > A production-oriented full-stack email scheduling system built for the ReachInbox Software Development Intern Assignment.
 
 **Core idea:** persist email state in PostgreSQL, schedule delivery with BullMQ delayed jobs backed by Redis, enforce distributed sending limits in Redis, and deliver emails through Ethereal SMTP — without cron jobs.
-
+IMPORTANT INFO-THIS PROJECT IS DEPLOYED ON RENDER WHICH DOES NOT ALLOW SERVICES TO RUN ON PORT-587 WHICH PROHIBITS THE SMTP SERVICE TO RUN
 ---
 
 ## ✨ What This Project Does
