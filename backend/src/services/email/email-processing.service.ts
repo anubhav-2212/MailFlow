@@ -7,7 +7,6 @@ import { withEmailSendThrottle } from './email-throttle.service.js';
 import {
   findEmailById,
   markEmailAsProcessingIfScheduled,
-  markEmailAsFailed,
   markEmailAsSent,
   markEmailAsScheduled,
 } from './email.repository.js';
@@ -17,7 +16,7 @@ import { sendEmail } from './smtp.service.js';
 import { consumeHourlyEmailSlot } from './email-rate-limit.service.js';
 
 import { rescheduleEmail } from '../../queue/email.queues.js';
-
+import { updateCampaignStatus } from "../campaign.service.js";
 interface ProcessEmailJobInput {
   emailId: string;
   jobId: string;
@@ -27,7 +26,6 @@ export async function processEmailSendingJob({
   emailId,
   jobId,
 }: ProcessEmailJobInput) {
-
   // ----------------------------------------
   // 1. Find email
   // ----------------------------------------
@@ -44,11 +42,23 @@ export async function processEmailSendingJob({
   }
 
   // ----------------------------------------
-  // 2. Only SCHEDULED emails can be processed
+  // 2. Validate email state
+  //
+  // SCHEDULED:
+  //   Normal first attempt.
+  //
+  // PROCESSING:
+  //   BullMQ retry after a previous send failure.
+  //
+  // SENT / FAILED:
+  //   Nothing more to process.
   // ----------------------------------------
 
-  if (email.status !== EmailStatus.SCHEDULED) {
-    logWarn('email.worker.email_not_scheduled', {
+  if (
+    email.status !== EmailStatus.SCHEDULED &&
+    email.status !== EmailStatus.PROCESSING
+  ) {
+    logWarn('email.worker.email_not_processable', {
       jobId,
       emailId,
       currentStatus: email.status,
@@ -58,48 +68,60 @@ export async function processEmailSendingJob({
   }
 
   // ----------------------------------------
-  // 3. Atomically claim the email
+  // 3. Claim SCHEDULED email
   //
   // SCHEDULED → PROCESSING
   //
-  // This protects against duplicate jobs.
+  // On BullMQ retry the email is already
+  // PROCESSING, so don't attempt to claim it again.
   // ----------------------------------------
 
-  const updateResult =
-    await markEmailAsProcessingIfScheduled(emailId);
+  if (email.status === EmailStatus.SCHEDULED) {
+    const updateResult =
+      await markEmailAsProcessingIfScheduled(emailId);
 
-  if (updateResult.count === 0) {
-    logWarn(
-      'email.worker.email_state_transition_skipped',
-      {
-        jobId,
-        emailId,
-        fromStatus: EmailStatus.SCHEDULED,
-        toStatus: EmailStatus.PROCESSING,
-      },
-    );
+    if (updateResult.count === 0) {
+      logWarn(
+        'email.worker.email_state_transition_skipped',
+        {
+          jobId,
+          emailId,
+          fromStatus: EmailStatus.SCHEDULED,
+          toStatus: EmailStatus.PROCESSING,
+        },
+      );
 
-    return;
+      return;
+    }
+
+    logInfo('email.worker.email_marked_processing', {
+      jobId,
+      emailId,
+      fromStatus: EmailStatus.SCHEDULED,
+      toStatus: EmailStatus.PROCESSING,
+    });
+  } else {
+    // ----------------------------------------
+    // BullMQ retry
+    // ----------------------------------------
+
+    logInfo('email.worker.email_retrying', {
+      jobId,
+      emailId,
+      status: EmailStatus.PROCESSING,
+    });
   }
 
-  logInfo('email.worker.email_marked_processing', {
-    jobId,
-    emailId,
-    fromStatus: EmailStatus.SCHEDULED,
-    toStatus: EmailStatus.PROCESSING,
-  });
-
   // ----------------------------------------
-  // 4. Check PER-SENDER hourly limit
+  // 4. Check per-sender hourly limit
   // ----------------------------------------
 
   const rateLimit = await consumeHourlyEmailSlot(
     email.senderId,
-    email.campaign.hourlyLimit, 
+    email.campaign.hourlyLimit,
   );
 
   if (!rateLimit.allowed) {
-
     logWarn('email.worker.hourly_limit_reached', {
       jobId,
       emailId,
@@ -109,7 +131,6 @@ export async function processEmailSendingJob({
     });
 
     if (rateLimit.retryAt) {
-
       // PROCESSING → SCHEDULED
 
       await markEmailAsScheduled(
@@ -117,23 +138,18 @@ export async function processEmailSendingJob({
         rateLimit.retryAt,
       );
 
-      // Schedule the email for the next hour
-
       await rescheduleEmail(
         emailId,
         rateLimit.retryAt,
       );
 
-      logInfo(
-        'email.worker.email_rescheduled',
-        {
-          jobId,
-          emailId,
-          senderId: email.senderId,
-          retryAt: rateLimit.retryAt,
-          reason: 'HOURLY_LIMIT',
-        },
-      );
+      logInfo('email.worker.email_rescheduled', {
+        jobId,
+        emailId,
+        senderId: email.senderId,
+        retryAt: rateLimit.retryAt,
+        reason: 'HOURLY_LIMIT',
+      });
     }
 
     return;
@@ -144,7 +160,6 @@ export async function processEmailSendingJob({
   // ----------------------------------------
 
   try {
-
     const result = await withEmailSendThrottle(
       () =>
         sendEmail({
@@ -160,7 +175,7 @@ export async function processEmailSendingJob({
     // --------------------------------------
 
     await markEmailAsSent(emailId);
-
+await updateCampaignStatus(email.campaignId);
     logInfo('email.worker.email_sent', {
       jobId,
       emailId,
@@ -168,11 +183,19 @@ export async function processEmailSendingJob({
       messageId: result.messageId,
       previewUrl: result.previewUrl,
     });
-
   } catch (error) {
-
     // --------------------------------------
-    // 7. PROCESSING → FAILED
+    // 7. Send attempt failed
+    //
+    // IMPORTANT:
+    //
+    // Do NOT mark the email FAILED here.
+    //
+    // Throwing allows BullMQ to perform its
+    // configured retries.
+    //
+    // The worker should decide when all attempts
+    // have been exhausted.
     // --------------------------------------
 
     const errorMessage =
@@ -180,19 +203,12 @@ export async function processEmailSendingJob({
         ? error.message
         : 'Unknown email error';
 
-    await markEmailAsFailed(
-      emailId,
-      errorMessage,
-    );
-
-    logWarn('email.worker.email_failed', {
+    logWarn('email.worker.email_attempt_failed', {
       jobId,
       emailId,
       senderId: email.senderId,
       error: errorMessage,
     });
-
-    // Let BullMQ handle the failed job
 
     throw error;
   }

@@ -1,5 +1,6 @@
 import prisma from "../config/prisma.js";
 
+
 interface CreateCampaignInput {
   userId: string;
   subject: string;
@@ -8,7 +9,10 @@ interface CreateCampaignInput {
   delayMs?: number;
   hourlyLimit?: number;
 }
-// Create Campaign
+
+// ========================================
+// CREATE CAMPAIGN
+// ========================================
 
 export async function createCampaign(
   input: CreateCampaignInput,
@@ -27,7 +31,101 @@ export async function createCampaign(
   return campaign;
 }
 
-// Get Campaigns
+// ========================================
+// UPDATE CAMPAIGN STATUS
+// ========================================
+
+export async function updateCampaignStatus(
+  campaignId: string,
+) {
+  const campaign = await prisma.campaign.findUnique({
+    where: {
+      id: campaignId,
+    },
+
+    select: {
+      id: true,
+      status: true,
+
+      emails: {
+        select: {
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!campaign) {
+    return null;
+  }
+
+  const emails = campaign.emails;
+
+  // ----------------------------------------
+  // No emails yet
+  // ----------------------------------------
+
+  if (emails.length === 0) {
+    return campaign;
+  }
+
+  // ----------------------------------------
+  // Check whether any emails are still pending
+  // ----------------------------------------
+
+  const hasPendingEmails = emails.some(
+    (email) =>
+      email.status === "SCHEDULED" ||
+      email.status === "PROCESSING",
+  );
+
+  if (hasPendingEmails) {
+    // Campaign is still running.
+
+    if (campaign.status !== "ACTIVE") {
+      return prisma.campaign.update({
+        where: {
+          id: campaignId,
+        },
+
+        data: {
+          status: "ACTIVE",
+        },
+      });
+    }
+
+    return campaign;
+  }
+
+  // ----------------------------------------
+  // All emails are finished
+  //
+  // At this point every email is either:
+  //
+  // SENT
+  // FAILED
+  //
+  // Therefore the campaign is completed.
+  // ----------------------------------------
+
+  if (campaign.status !== "COMPLETED") {
+    return prisma.campaign.update({
+      where: {
+        id: campaignId,
+      },
+
+      data: {
+        status: "COMPLETED",
+      },
+    });
+  }
+
+  return campaign;
+}
+
+// ========================================
+// GET CAMPAIGNS
+// ========================================
 
 export async function getCampaigns(
   userId: string,
@@ -52,7 +150,10 @@ export async function getCampaigns(
 
   return campaigns;
 }
-// Get Single Campaign
+
+// ========================================
+// GET SINGLE CAMPAIGN
+// ========================================
 
 export async function getCampaignById(
   campaignId: string,
@@ -88,16 +189,19 @@ export async function getCampaignById(
     throw new Error("Campaign not found");
   }
 
-  // Make sure the authenticated user owns this campaign
+  // ----------------------------------------
+  // Verify ownership
+  // ----------------------------------------
+
   if (campaign.userId !== userId) {
     throw new Error(
       "Campaign does not belong to authenticated user",
     );
   }
 
-  // ------------------------------------
+  // ----------------------------------------
   // Calculate email statistics
-  // ------------------------------------
+  // ----------------------------------------
 
   const stats = {
     total: campaign.emails.length,
@@ -138,6 +242,3 @@ export async function getCampaignById(
     emails: campaign.emails,
   };
 }
-  // ------------------------------------
-  // Calculate email statistics
-  // ------------------------------------

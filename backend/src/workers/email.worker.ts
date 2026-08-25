@@ -1,4 +1,5 @@
 import "dotenv/config";
+import prisma from "../config/prisma.js";
 
 import { Worker, type Job } from 'bullmq';
 
@@ -6,8 +7,15 @@ import redisConnection from '../config/redis.js';
 import { logError, logInfo } from '../lib/logger.js';
 import { EMAIL_QUEUE_NAME } from '../queue/email.queues.js';
 import type { SendEmailJobData } from '../queue/queues.types.js';
-import { processEmailSendingJob } from '../services/email/email-processing.service.js';
+import {
+  processEmailSendingJob,
+} from '../services/email/email-processing.service.js';
 
+import {
+  markEmailAsFailed,
+} from '../services/email/email.repository.js';
+
+import { updateCampaignStatus } from '../services/campaign.service.js';
 function getWorkerConcurrency() {
   const rawConcurrency =
     process.env.EMAIL_WORKER_CONCURRENCY ?? '1';
@@ -95,12 +103,93 @@ emailWorker.on('completed', (job) => {
 // Job failed
 // ----------------------------------------
 
-emailWorker.on('failed', (job, error) => {
-  logError('email.worker.job_failed', error, {
-    jobId: job ? String(job.id) : 'unknown',
-    queueName: EMAIL_QUEUE_NAME,
-    emailId: job?.data.emailId,
+emailWorker.on('failed', async (job, error) => {
+  if (!job) {
+    logError(
+      'email.worker.job_failed',
+      error,
+      {
+        jobId: 'unknown',
+        queueName: EMAIL_QUEUE_NAME,
+      },
+    );
+
+    return;
+  }
+
+  const emailId = job.data.emailId;
+  const jobId = String(job.id);
+
+  logError(
+    'email.worker.job_failed',
+    error,
+    {
+      jobId,
+      queueName: EMAIL_QUEUE_NAME,
+      emailId,
+      attemptsMade: job.attemptsMade,
+      maxAttempts: job.opts.attempts ?? 1,
+    },
+  );
+
+  // ----------------------------------------
+  // Only mark the email FAILED when BullMQ
+  // has exhausted all configured attempts.
+  // ----------------------------------------
+
+  const maxAttempts = job.opts.attempts ?? 1;
+
+  if (job.attemptsMade < maxAttempts) {
+    logInfo('email.worker.job_retry_pending', {
+      jobId,
+      emailId,
+      attemptsMade: job.attemptsMade,
+      maxAttempts,
+    });
+
+    return;
+  }
+
+  // ----------------------------------------
+  // FINAL ATTEMPT FAILED
+  // ----------------------------------------
+
+  const errorMessage =
+    error instanceof Error
+      ? error.message
+      : 'Unknown email error';
+
+  await markEmailAsFailed(
+    emailId,
+    errorMessage,
+  );
+
+  logInfo('email.worker.email_marked_failed', {
+    jobId,
+    emailId,
+    attemptsMade: job.attemptsMade,
+    maxAttempts,
+    error: errorMessage,
   });
+
+  // ----------------------------------------
+  // Recalculate campaign status
+  // ----------------------------------------
+
+  const email = await prisma.email.findUnique({
+    where: {
+      id: emailId,
+    },
+    select: {
+      campaignId: true,
+    },
+  });
+
+  if (email) {
+    await updateCampaignStatus(
+      email.campaignId,
+    );
+  }
 });
 
 // ----------------------------------------
