@@ -11,8 +11,8 @@ import {
   markEmailAsScheduled,
 } from './email.repository.js';
 
-import { sendEmail } from './smtp.service.js';
-
+// import { sendEmail } from './smtp.service.js';
+import { sendEmailWithResend } from './resend.service.js';
 import { consumeHourlyEmailSlot } from './email-rate-limit.service.js';
 
 import { rescheduleEmail } from '../../queue/email.queues.js';
@@ -160,15 +160,24 @@ export async function processEmailSendingJob({
   // ----------------------------------------
 
   try {
+    // const result = await withEmailSendThrottle(
+    //   () =>
+    //     sendEmail({
+    //       from: email.sender.email,
+    //       to: email.recipient,
+    //       subject: email.subject,
+    //       text: email.body,
+    //     }),
+    // );
     const result = await withEmailSendThrottle(
-      () =>
-        sendEmail({
-          from: email.sender.email,
-          to: email.recipient,
-          subject: email.subject,
-          text: email.body,
-        }),
-    );
+  () =>
+    sendEmailWithResend({
+      from: email.sender.email,
+      to: email.recipient,
+      subject: email.subject,
+      text: email.body,
+    }),
+);
 
     // --------------------------------------
     // 6. PROCESSING → SENT
